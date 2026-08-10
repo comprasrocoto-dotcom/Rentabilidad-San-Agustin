@@ -1,6 +1,6 @@
-# Rentabilidad - Casa de Nadie
+# Rentabilidad - San Agustin
 
-Dashboard web de rentabilidad y food cost para Casa de Nadie. Un solo archivo
+Dashboard web de rentabilidad y food cost para San Agustin. Un solo archivo
 'index.html' con HTML + CSS + JavaScript vanilla: sin build, sin framework, sin npm.
 
 ## Como funciona
@@ -8,7 +8,7 @@ Dashboard web de rentabilidad y food cost para Casa de Nadie. Un solo archivo
 No hay backend ni base de datos. El dashboard lee un Google Sheet publicado,
 exportado como XLSX, y se re-sincroniza cada 60 segundos sin recargar la pagina.
 
-- Fuente: hoja de calculo "Formato de Informes Casa de Nadie" (export?format=xlsx)
+- Fuente: hoja de calculo "Formato de Informes 123 Wok" (export?format=xlsx)
 - Deteccion de cambios: hash FNV-1a con muestreo cada 521 bytes; solo re-renderiza si el archivo cambio
 - Fallback: si se abre como archivo local o falla el fetch, aparece un selector para cargar el Excel a mano
 
