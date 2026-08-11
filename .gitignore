@@ -1,0 +1,20 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno con credenciales reales (NUNCA subir)
+.env
+.env.local
+.env.*.local
+
+# La plantilla SI se versiona:
+!.env.example
+
+# Vercel
+.vercel
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema
+.DS_Store
