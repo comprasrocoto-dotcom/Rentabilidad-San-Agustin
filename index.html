@@ -2173,7 +2173,8 @@ document.addEventListener("DOMContentLoaded",function(){
   function install(){
     if(typeof loadBuffer!=='function'||typeof parseExcel!=='function'){ return setTimeout(install,60); }
     if(window.__SA_BOOT__) return; window.__SA_BOOT__=true;
-    var _orig=loadBuffer;
+    window.SA_patchResumen=function(){try{var F=window.F||{sede:'all'};var sedeKey=(F.sede&&F.sede!=='all')?F.sede:'ALL';var G=window.SA_invGame||{};var g=G[sedeKey]||G[String(sedeKey).toUpperCase()];if(!g){var ks=Object.keys(G),w=String(sedeKey).toUpperCase();var mk=ks.filter(function(k){return k.toUpperCase()===w;})[0];g=mk?G[mk]:null;}if(!g)return;var kpis=[].slice.call(document.querySelectorAll('#app .kpi'));function findCard(re){for(var i=0;i<kpis.length;i++){var lb=kpis[i].querySelector('.lb');if(lb&&re.test(lb.textContent||''))return kpis[i];}return null;}var mvCard=findCard(/MERCANC/i);var mvVal=g.mv;if(mvCard){var vl=mvCard.querySelector('.vl'),sb=mvCard.querySelector('.sb');if(g.finMissing){if(vl)vl.textContent='Sin info';if(sb)sb.textContent='Sin inventario final';}else{if(vl)vl.textContent=window.fmt(mvVal);if(sb)sb.textContent=(g.iniMissing?'Preliminar · ':'')+window.fmtCOP(mvVal);}}var venCard=findCard(/VENTAS/i);var ventas=0;if(venCard){var vsb=venCard.querySelector('.sb');if(vsb){ventas=Number((vsb.textContent||'').replace(/[^0-9]/g,''))||0;}}var costoCard=findCard(/COSTO/i);if(costoCard){var vlc=costoCard.querySelector('.vl');if(g.finMissing){if(vlc)vlc.textContent='Sin info';}else if(ventas>0&&vlc){vlc.textContent=(mvVal/ventas*100).toFixed(1).replace('.',',')+'%';}}var ubCard=findCard(/UTILIDAD/i);if(ubCard&&!g.finMissing&&ventas>0){var ub=ventas-mvVal;var vlu=ubCard.querySelector('.vl'),sbu=ubCard.querySelector('.sb');if(vlu)vlu.textContent=window.fmt(ub);if(sbu)sbu.textContent=(ub/ventas*100).toFixed(1).replace('.',',')+'% sobre la base neta de ventas';}else if(ubCard&&g.finMissing){var vlu2=ubCard.querySelector('.vl');if(vlu2)vlu2.textContent='Sin info';}}catch(_){}};
+var _orig=loadBuffer;
     window.loadBuffer=function(buf){
       try{
         var wb=XLSX.read(new Uint8Array(buf),{type:'array'});
@@ -2183,10 +2184,10 @@ document.addEventListener("DOMContentLoaded",function(){
         if(typeof fillSelects==='function') fillSelects();
         if(typeof applyFilter==='function') applyFilter();
         if(window.SA_renderMV) window.SA_renderMV();
-        window.SA_wb=wb; return true;
+        window.SA_wb=wb; if(typeof bootDone==='function'){try{bootDone();}catch(_){}} if(window.SA_patchResumen){try{window.SA_patchResumen();}catch(_){}} return true;
       }catch(e){ try{ return _orig.apply(this,arguments); }catch(e2){ throw e; } }
     };
-    if(typeof applyFilter==='function'){ var _af=applyFilter; window.applyFilter=function(){ var r=_af.apply(this,arguments); try{ if(window.SA_renderMV) window.SA_renderMV(); }catch(e){} return r; }; }
+    if(typeof applyFilter==='function'){ var _af=applyFilter; window.applyFilter=function(){ var r=_af.apply(this,arguments); try{ if(window.SA_renderMV) window.SA_renderMV(); if(window.SA_patchResumen){try{window.SA_patchResumen();}catch(_){}} }catch(e){} return r; }; }
   }
   if(document.readyState!=='loading') install(); else document.addEventListener('DOMContentLoaded',install);
   window.addEventListener('load',install);
