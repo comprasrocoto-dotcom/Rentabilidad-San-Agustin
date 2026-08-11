@@ -1,17 +1,7 @@
 {
-  "name": "rentabilidad-san-agustin",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Backend serverless (Vercel) que expone el Google Sheet privado de San Agustin via Google Sheets API (solo lectura) y lo entrega como XLSX/JSON.",
-  "main": "api/data.js",
-  "scripts": {
-    "start": "echo \"Static site + Vercel serverless functions; no local server\""
-  },
-  "dependencies": {
-    "googleapis": "^144.0.0",
-    "xlsx": "^0.18.5"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+    "name": "rentabilidad-san-agustin",
+    "version": "2.0.0",
+    "private": true,
+    "description": "Dashboard estatico de rentabilidad y food cost de San Agustin. Un solo index.html que lee el Google Sheet publicado como XLSX (export?format=xlsx). Sin backend, sin API, sin dependencias.",
+    "main": "index.html"
 }
