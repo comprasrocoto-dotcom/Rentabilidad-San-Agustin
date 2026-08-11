@@ -157,7 +157,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 </head>
 <body>
 <header>
- <div class="logo"><span class="em">&#127869;&#65039;</span><span>Casa de Nadie<small>Rentabilidad &amp; Food Cost</small></span></div>
+ <div class="logo"><span class="em">&#127869;&#65039;</span><span>San Agustín<small>Rentabilidad &amp; Food Cost</small></span></div>
  <div class="hspace"></div>
  <div class="badge" id="badge"><span class="dot"></span><span id="badge-tx">Cargando&#8230;</span></div>
  <div class="upd" id="upd"></div>
@@ -358,8 +358,8 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 "use strict";
 
 /* ====================== CONFIGURACION ====================== */
-var SHEET_ID = "";
-var DATA_URL = "/api/data";
+const SHEET_ID = "1ZcfeaYXmR0WwuBPvCTyqqPOi6mVrJJr3c1s36Dz_LMc";
+const DATA_URL = "https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=xlsx";
 var POLL_MS  = 60000;
 var META     = 35;            /* meta de food cost % */
 var LOCALE   = "es-CO";
@@ -2088,6 +2088,109 @@ document.addEventListener("DOMContentLoaded",function(){
   syncFromDrive();
   TIMER=setInterval(syncFromDrive,POLL_MS);
 });
+</script>
+
+<script>
+
+/* ===== SAN AGUSTÍN · CAPA DE CORRECCIÓN (data XLSX directa, sin API) ===== */
+(function(){
+  if(window.__SA_LAYER__) return; window.__SA_LAYER__=true;
+  var SA_ID='1ZcfeaYXmR0WwuBPvCTyqqPOi6mVrJJr3c1s36Dz_LMc';
+  var INI_SERIAL=46203, FIN_SERIAL=46234;
+  var EXCL_MOTIVO='envioscentrodeproduccion';
+  var OPER_CC_SET={cocina:1,bar:1};
+  function fixMoji(s){ if(s==null)return ''; if(typeof s!=='string')return String(s); if(/[\u00c3\u00c2]/.test(s)){ try{ return decodeURIComponent(escape(s)); }catch(e){ return s; } } return s; }
+  function norm(s){ return fixMoji(s).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+  function canonSede(v){ var s=fixMoji(v).toUpperCase().trim().replace(/^123\s*WOK\s*/,'').trim(); return s; }
+  function toNum(v){ if(v==null)return 0; if(typeof v==='number')return v; var s=String(v).replace(/\s/g,''); if(s.indexOf('.')>-1&&s.indexOf(',')>-1){s=s.replace(/\./g,'').replace(',','.');}else if(s.indexOf(',')>-1){s=s.replace(',','.');} var n=parseFloat(s); return isNaN(n)?0:n; }
+  function serial(v){ v=Number(v); return v?Math.round(v):0; }
+  function keyOf(row,want){ var w=norm(want),ks=Object.keys(row||{}); return ks.filter(function(k){return norm(k)===w;})[0] || ks.filter(function(k){return norm(k).indexOf(w)>-1;})[0]; }
+  window.SA_fixWb=function(wb){ if(!wb||!wb.Sheets)return wb; wb.SheetNames.forEach(function(nm){ var ws=wb.Sheets[nm]; if(!ws||!ws['!ref'])return; var rg=XLSX.utils.decode_range(ws['!ref']); for(var R=rg.s.r;R<=rg.e.r;R++)for(var C=rg.s.c;C<=rg.e.c;C++){ var a=XLSX.utils.encode_cell({r:R,c:C}),c=ws[a]; if(c&&c.t==='s'&&typeof c.v==='string'&&/[\u00c3\u00c2]/.test(c.v)){ c.v=fixMoji(c.v); if(c.w)c.w=fixMoji(c.w); } } }); return wb; };
+  window.SA_invGame=window.SA_invGame||{};
+  window.SA_buildGame=function(wb){
+    var S=function(nm){return wb.SheetNames.filter(function(n){return norm(n).indexOf(norm(nm))>-1;})[0];};
+    var J=function(nm){var s=S(nm); return s?XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:null}):[];};
+    var C=J('compra'),I=J('inventario'),T=J('traslado');
+    var g={};
+    if(!C.length&&!I.length){ window.SA_invGame=g; return g; }
+    var cAlm=keyOf(C[0]||{},'almacen'),cNeto=keyOf(C[0]||{},'totalneto'),cCC=keyOf(C[0]||{},'cc');
+    var iAlm=keyOf(I[0]||{},'almacen'),iTot=keyOf(I[0]||{},'total'),iFec=keyOf(I[0]||{},'fechadoc');
+    var tAlm=keyOf(T[0]||{},'almacen'),tCV=keyOf(T[0]||{},'costevariacion'),tMot=keyOf(T[0]||{},'motivotraspaso');
+    function comp(s){return C.filter(function(r){return (s==='ALL'||canonSede(r[cAlm])===s)&&OPER_CC_SET[norm(r[cCC])];}).reduce(function(a,r){return a+toNum(r[cNeto]);},0);}
+    function invAt(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&(s==='ALL'||canonSede(r[iAlm])===s);}).reduce(function(a,r){return a+toNum(r[iTot]);},0);}
+    function invN(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&(s==='ALL'||canonSede(r[iAlm])===s);}).length;}
+    function tras(s){return T.filter(function(r){return (s==='ALL'||canonSede(r[tAlm])===s)&&norm(r[tMot])!==EXCL_MOTIVO;}).reduce(function(a,r){return a+toNum(r[tCV]);},0);}
+    var sedes=['ALL'];
+    I.concat(C).forEach(function(r){var s=canonSede(r[iAlm]||r[cAlm]); if(s&&sedes.indexOf(s)<0)sedes.push(s);});
+    sedes.forEach(function(s){ var ini=invAt(INI_SERIAL,s),fin=invAt(FIN_SERIAL,s),fr=invN(FIN_SERIAL,s),ir=invN(INI_SERIAL,s),cp=comp(s),tr=tras(s); var finMiss=fr===0,iniMiss=ir===0; g[s]={ini:ini,compras:cp,traslados:tr,fin:fin,finMissing:finMiss,iniMissing:iniMiss,mv:(finMiss||iniMiss)?null:(ini+cp+tr-fin)}; });
+    window.SA_invGame=g; return g;
+  };
+  window.SA_meta={INI_SERIAL:INI_SERIAL,FIN_SERIAL:FIN_SERIAL,iniLabel:'2026-06-30',finLabel:'2026-07-31'};
+})();
+
+
+/* ===== SAN AGUSTÍN · AUGMENT + INYECCIÓN MV ===== */
+(function(){
+  if(window.__SA_LAYER2__) return; window.__SA_LAYER2__=true;
+  function fixMoji(s){ if(s==null)return ''; if(typeof s!=='string')return String(s); if(/[\u00c3\u00c2]/.test(s)){try{return decodeURIComponent(escape(s));}catch(e){return s;}} return s; }
+  function norm(s){ return fixMoji(s).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+  function canonSede(v){ return fixMoji(v).toUpperCase().trim().replace(/^123\s*WOK\s*/,'').trim(); }
+  function keyOf(row,want){ var w=norm(want),ks=Object.keys(row||{}); return ks.filter(function(k){return norm(k)===w;})[0]||ks.filter(function(k){return norm(k).indexOf(w)>-1;})[0]; }
+  function toNum(v){ if(v==null)return 0; if(typeof v==='number')return v; var s=String(v).replace(/\s/g,''); if(s.indexOf('.')>-1&&s.indexOf(',')>-1){s=s.replace(/\./g,'').replace(',','.');}else if(s.indexOf(',')>-1){s=s.replace(',','.');} var n=parseFloat(s); return isNaN(n)?0:n; }
+  window.SA_augment=function(wb){
+    ['ventas','compras','inv','mv'].forEach(function(k){ (RAW[k]||[]).forEach(function(r){ if(r.sede!=null) r.sede=canonSede(r.sede); }); });
+    try{
+      var S=function(nm){return wb.SheetNames.filter(function(n){return norm(n).indexOf(norm(nm))>-1;})[0];};
+      var Craw=XLSX.utils.sheet_to_json(wb.Sheets[S('compra')],{defval:null});
+      if(Craw.length){
+        var ccK=keyOf(Craw[0],'cc'),artK=keyOf(Craw[0],'articulo'),netK=keyOf(Craw[0],'totalneto');
+        var map={}; Craw.forEach(function(x){ var kk=norm(x[artK])+'|'+Math.round(toNum(x[netK])); if(!(kk in map)) map[kk]=fixMoji(x[ccK]); });
+        RAW.compras.forEach(function(r){ var kk=norm(r.art)+'|'+Math.round(r.total||0); if(map[kk]!=null) r.cc=map[kk]; });
+      }
+    }catch(e){}
+    if(window.SA_buildGame) window.SA_buildGame(wb);
+  };
+  window.SA_renderMV=function(){
+    var g=window.SA_invGame||{}; var sede=(typeof F!=='undefined'&&F.sede&&F.sede!=='all')?String(F.sede).toUpperCase():'ALL';
+    var d=g[sede]||g['ALL']; if(!d) return;
+    function fmt(n){ try{ return (typeof fmtCOP==='function')?fmtCOP(n):('$'+Math.round(n).toLocaleString('es-CO')); }catch(e){ return '$'+Math.round(n); } }
+    var kmv=document.getElementById('k-mv'),note=document.getElementById('mv-note'),cg=document.getElementById('c-mv-global');
+    var estado,mvTxt;
+    if(d.finMissing){ estado='Sin información — falta inventario final de esta sede'; mvTxt='Sin info'; }
+    else if(d.iniMissing){ estado='Preliminar — falta inventario inicial'; mvTxt='Pendiente'; }
+    else { estado='Inv. Inicial ('+window.SA_meta.iniLabel+') + Compras + Traslados − Inv. Final ('+window.SA_meta.finLabel+')'; mvTxt=fmt(d.mv); }
+    if(kmv) kmv.textContent=mvTxt;
+    if(cg) cg.textContent=(d.mv==null?mvTxt:fmt(d.mv));
+    if(note) note.textContent='Mercancía Vendida = '+estado+'. Traslados por Coste Variación; se excluyen «Envios Centro de Produccion».';
+    window.SA_lastMV=d;
+  };
+})();
+
+</script>
+
+<script>
+(function(){
+  function install(){
+    if(typeof loadBuffer!=='function'||typeof parseExcel!=='function'){ return setTimeout(install,60); }
+    if(window.__SA_BOOT__) return; window.__SA_BOOT__=true;
+    var _orig=loadBuffer;
+    window.loadBuffer=function(buf){
+      try{
+        var wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+        if(window.SA_fixWb) window.SA_fixWb(wb);
+        if(typeof parseExcel==='function') parseExcel(wb);
+        if(window.SA_augment) window.SA_augment(wb);
+        if(typeof fillSelects==='function') fillSelects();
+        if(typeof applyFilter==='function') applyFilter();
+        if(window.SA_renderMV) window.SA_renderMV();
+        window.SA_wb=wb; return true;
+      }catch(e){ try{ return _orig.apply(this,arguments); }catch(e2){ throw e; } }
+    };
+    if(typeof applyFilter==='function'){ var _af=applyFilter; window.applyFilter=function(){ var r=_af.apply(this,arguments); try{ if(window.SA_renderMV) window.SA_renderMV(); }catch(e){} return r; }; }
+  }
+  if(document.readyState!=='loading') install(); else document.addEventListener('DOMContentLoaded',install);
+  window.addEventListener('load',install);
+})();
 </script>
 </body>
 </html>
