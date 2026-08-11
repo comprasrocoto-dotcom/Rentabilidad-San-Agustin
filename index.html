@@ -2188,7 +2188,7 @@ var _orig=loadBuffer;
         if(window.SA_installSedeFilter){try{window.SA_installSedeFilter();}catch(_){}} window.SA_wb=wb; if(typeof bootDone==='function'){try{bootDone();}catch(_){}} if(window.SA_patchResumen){try{window.SA_patchResumen();}catch(_){}} return true;
       }catch(e){ try{ return _orig.apply(this,arguments); }catch(e2){ throw e; } }
     };
-    if(typeof applyFilter==='function'){ var _af=applyFilter; window.applyFilter=function(){ var r=_af.apply(this,arguments); try{ if(window.SA_renderMV) window.SA_renderMV(); if(window.SA_installSedeFilter){try{window.SA_installSedeFilter();}catch(_){}} if(window.SA_patchResumen){try{window.SA_patchResumen();}catch(_){}} }catch(e){} return r; }; }
+    if(typeof applyFilter==='function'){ if(typeof renderMV==='function'&&!window.__origRenderMV){window.__origRenderMV=renderMV;window.renderMV=function(){var rr=window.__origRenderMV.apply(this,arguments);try{if(window.SA_renderMV)window.SA_renderMV();}catch(_){}return rr;};} var _af=applyFilter; window.applyFilter=function(){ var r=_af.apply(this,arguments); try{ if(window.SA_renderMV) window.SA_renderMV(); if(window.SA_installSedeFilter){try{window.SA_installSedeFilter();}catch(_){}} if(window.SA_patchResumen){try{window.SA_patchResumen();}catch(_){}} }catch(e){} return r; }; }
   }
   if(document.readyState!=='loading') install(); else document.addEventListener('DOMContentLoaded',install);
   window.addEventListener('load',install);
