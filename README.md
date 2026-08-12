@@ -32,8 +32,7 @@ columnas se buscan por palabras clave, asi que renombrarlas no rompe el tablero.
 Resumen, Ventas, Compras, Costo, Rentabilidad, Participacion, Inventarios y
 Mercancia Vendida (juego de inventarios con exportacion a Excel).
 
-Hay una sola marca y una sola sede, asi que el tablero no compara sedes: no existe
-filtro de sede ni graficos por sede. El analisis se abre por Centro de Costo
+El tablero tiene un filtro global por Sede, construido dinamicamente a partir de los datos (Todas, Laureles, Interplaza, Oviedo, Tesoro, Centro de Produccion), que se aplica antes de calcular y afecta todos los modulos. El analisis tambien se abre por Centro de Costo
 (Bar / Cocina) con un filtro de Todos / Bar / Cocina.
 
 Un boton en el encabezado alterna entre modo claro y modo oscuro. La preferencia se
@@ -90,8 +89,8 @@ que platos necesitan revision de precio o de receta.
 - Todos los indicadores respetan a la vez el filtro de Mes y Centro de Costo.
   El filtro de centro ofrece Todos / Bar / Cocina; las ventas de Eventos se reparten
   entre Bar y Cocina segun el articulo, para que nada quede fuera del analisis.
-- Mercancia Vendida = Inventario Inicial + Compras - Inventario Final.
-  Excel equivalente: =+[@[Inv Inicial]]+[@Compras]-([@[Inv Final]])
+- Mercancia Vendida = Inventario Inicial + Compras + Traslados - Inventario Final.
+  Excel equivalente: =+[@[Inv Inicial]]+[@Compras]+[@Traslados]-([@[Inv Final]])
 - Costo Mercancia Vendida (%) = Mercancia Vendida / Ventas.
   Excel equivalente: =+[@[Mercancia vendida]]/[@[Ventas]]
 - Inventario Inicial = primer conteo del periodo seleccionado.
@@ -111,7 +110,7 @@ que platos necesitan revision de precio o de receta.
 - Utilidad = Venta Base - Costo. Margen = Utilidad / Venta Base. Costo % = Costo / Venta Base.
   Todo se calcula sobre la Venta Base, nunca sobre ventas con impuestos.
 - Mercancia Vendida por Sede y Costo de Mercancia Vendida por Sede ya no existen.
-  Quedan Mercancia Vendida por Centro de Costo y Costo de Mercancia Global.
+  Quedan Mercancia Vendida por Centro de Costo y Costo de Mercancia Global; el detalle por sede se obtiene con el filtro global de Sede, que recalcula la Mercancia Vendida para la sede elegida y muestra "Sin informacion" cuando esa sede no tiene inventario o compras (no asume cero).
 - Los graficos de una pestana oculta se redimensionan al mostrarla, para que las barras
   y sus etiquetas queden alineadas.
 
