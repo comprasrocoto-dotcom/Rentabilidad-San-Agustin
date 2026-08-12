@@ -341,7 +341,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
  </div>
  <div class="card"><h3>Costo Mercanc&iacute;a Vendida % por Centro de Costos <em>meta 35%</em></h3><div class="cw h300"><canvas id="c-mv-pct-cc"></canvas></div></div>
  <div class="card">
-  <h3>Juego de Inventarios <em>inv. inicial + compras - inv. final</em></h3>
+  <h3>Juego de Inventarios <em>inv. inicial + compras + traslados - inv. final</em></h3>
   <div class="tbar">
    <button class="btn" id="mv-export">&#11015; Exportar Excel</button>
    <span class="cnt" id="mv-count"></span>
@@ -1126,7 +1126,7 @@ function comprasTot(){ return C().compras; }
    Ventas          = suma de la Base Neta de VENTAS (sin IVA, sin propinas)
    Inv. Inicial    = primer conteo de inventario del periodo seleccionado
    Inv. Final      = segundo (ultimo) conteo de inventario del periodo
-   Mercancia Vend. = Inv. Inicial + Compras - Inv. Final
+   Mercancia Vend. = Inv. Inicial + Compras + Traslados - Inv. Final
    Costo Global %  = Mercancia Vendida / Ventas
    Utilidad Bruta  = Ventas - Mercancia Vendida
    Todo el dashboard consume calc(); nadie recalcula por su cuenta.
@@ -1175,12 +1175,14 @@ function calc(pred){
   }
   var completo = (hasIni && hasFin);
   /* sin los dos conteos el juego de inventarios no es aplicable: se usan las compras del periodo */
-  var mv = completo ? (ini + compras - fin) : compras;
+  var __saKey = (typeof F!=="undefined" && F && F.sede && F.sede!=="all") ? F.sede : "ALL";
+  var traslados = (typeof SA_invGame!=="undefined" && SA_invGame[__saKey]) ? (SA_invGame[__saKey].traslados||0) : 0;
+  var mv = completo ? (ini + compras + traslados - fin) : compras;
   return {
     ventas:ventas, ventasBC:ventasBC, ventasExcl:(ventas-ventasBC), ventasExclPct:safeDiv(ventas-ventasBC,ventas)*100, compras:compras,
     invIni:ini, invFin:fin, hasIni:hasIni, hasFin:hasFin, fIni:fIni, fFin:fFin,
     conteos:cs.length, completo:completo,
-    mv:mv,
+    mv:mv, traslados:traslados,
     costoPct:safeDiv(mv,ventasBC)*100,
     utilidad:ventas-mv,
     utilidadPct:safeDiv(ventas-mv,ventas)*100
@@ -1219,7 +1221,7 @@ function mvSrcNote(){
     (c.hasFin ? "apertura" : "cierre") + " para aplicar el juego de inventarios";
   return "solo Compras del periodo (Bar y Cocina): no hay conteos de inventario en el rango seleccionado";
 }
-function mvSrcShort(){ var c=C(); return c.completo ? "Ini + Compras - Final" : "Solo compras (falta 1 conteo)"; }
+function mvSrcShort(){ var c=C(); return c.completo ? "Ini + Compras + Traslados - Final" : "Solo compras (falta 1 conteo)"; }
 function periodoLbl(){
   var p = [];
   p.push(F.mes==="all" ? "todos los meses" : F.mes.toUpperCase());
@@ -1264,7 +1266,7 @@ function renderResumen(){
   if(nt) nt.innerHTML =
     "<b>Periodo: " + periodoLbl() + ".</b> Ventas = Base Neta del informe de ventas (sin IVA y sin propinas). " +
     "Compras = <b>solo</b> los centros de costo <b>Bar</b> y <b>Cocina</b> (los dem&aacute;s se excluyen del juego de inventarios). " +
-    "Mercanc&iacute;a Vendida = Inv. Inicial + Compras - Inv. Final. " +
+    "Mercanc&iacute;a Vendida = Inv. Inicial + Compras + Traslados - Inv. Final. " +
     "Costo Global = Mercanc&iacute;a Vendida / Ventas. Utilidad Bruta = Ventas - Mercanc&iacute;a Vendida. " +
     "C&aacute;lculo actual: " + mvSrcNote() + ".";
 
@@ -1275,6 +1277,8 @@ function renderResumen(){
      note:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
     {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
+    {icon:"&#128259;",label:"Traslados",value:fmt(c.traslados),sub:fmtCOP(c.traslados),
+     note:"Valorados por Coste Variaci&oacute;n (incluye Envios Centro de Produccion)",bar:"#8e44ad,#9b59b6"},
     {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
     {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:fmtCOP(c.mv),
@@ -1404,7 +1408,7 @@ function renderCosto(){
   var nt = document.getElementById("cos-note");
   if(nt) nt.innerHTML =
     "<b>Periodo: " + periodoLbl() + ".</b> Costo Global = Mercanc&iacute;a Vendida / Ventas Bar + Cocina. " +
-    "Mercanc&iacute;a Vendida = Inv. Inicial + Compras - Inv. Final, con las <b>compras de Bar y Cocina</b> &uacute;nicamente. " +
+    "Mercanc&iacute;a Vendida = Inv. Inicial + Compras + Traslados - Inv. Final, con las <b>compras de Bar y Cocina</b> &uacute;nicamente. " +
     "C&aacute;lculo actual: " + mvSrcNote() + ". Meta: " + META + "%.";
 
   var v = c.ventas, cg = c.costoPct;
@@ -1548,6 +1552,8 @@ function renderRent(){
      note:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
     {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
+    {icon:"&#128259;",label:"Traslados",value:fmt(c.traslados),sub:fmtCOP(c.traslados),
+     note:"Valorados por Coste Variaci&oacute;n (incluye Envios Centro de Produccion)",bar:"#8e44ad,#9b59b6"},
     {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
     {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:fmtCOP(c.mv),
@@ -2119,7 +2125,7 @@ document.addEventListener("DOMContentLoaded",function(){
     function comp(s){return C.filter(function(r){return (s==='ALL'||canonSede(r[cAlm])===s)&&OPER_CC_SET[norm(r[cCC])];}).reduce(function(a,r){return a+toNum(r[cNeto]);},0);}
     function invAt(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&(s==='ALL'||canonSede(r[iAlm])===s);}).reduce(function(a,r){return a+toNum(r[iTot]);},0);}
     function invN(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&(s==='ALL'||canonSede(r[iAlm])===s);}).length;}
-    function tras(s){return T.filter(function(r){return (s==='ALL'||canonSede(r[tAlm])===s)&&norm(r[tMot])!==EXCL_MOTIVO;}).reduce(function(a,r){return a+toNum(r[tCV]);},0);}
+    function tras(s){return T.filter(function(r){return (s==='ALL'||canonSede(r[tAlm])===s);}).reduce(function(a,r){return a+toNum(r[tCV]);},0);}
     var sedes=['ALL'];
     I.concat(C).forEach(function(r){var s=canonSede(r[iAlm]||r[cAlm]); if(s&&sedes.indexOf(s)<0)sedes.push(s);});
     sedes.forEach(function(s){ var ini=invAt(INI_SERIAL,s),fin=invAt(FIN_SERIAL,s),fr=invN(FIN_SERIAL,s),ir=invN(INI_SERIAL,s),cp=comp(s),tr=tras(s); var finMiss=fr===0,iniMiss=ir===0; g[s]={ini:ini,compras:cp,traslados:tr,fin:fin,finMissing:finMiss,iniMissing:iniMiss,mv:(finMiss||iniMiss)?null:(ini+cp+tr-fin)}; });
