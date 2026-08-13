@@ -198,6 +198,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 <section id="sec-resumen" class="active">
  <div class="note" id="res-note"></div>
  <div class="grid" id="k-res"></div>
+ <div id="sede-cmp-resumen"></div>
  <div class="row2">
   <div class="card"><h3>Ventas por Centro de Costos <em>base neta</em></h3><div class="cw h300"><canvas id="c-res-cc"></canvas></div></div>
   <div class="card"><h3>Evoluci&oacute;n de Ventas por Mes</h3><div class="cw h300"><canvas id="c-res-mes"></canvas></div></div>
@@ -214,6 +215,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 
 <section id="sec-ventas">
  <div class="grid" id="k-ven"></div>
+ <div id="sede-cmp-ventas"></div>
  <div class="row2">
   <div class="card"><h3>Participaci&oacute;n por Centro de Costos</h3><div class="cw h300"><canvas id="c-ven-cc"></canvas></div></div>
   <div class="card"><h3>Ventas por Categor&iacute;a</h3><div class="cw h300"><canvas id="c-ven-fam"></canvas></div></div>
@@ -231,6 +233,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 <section id="sec-compras">
  <div class="note" id="com-note"></div>
  <div class="grid" id="k-com" style="position:sticky;top:148px;z-index:50;background:var(--bg);padding-top:4px"></div>
+ <div id="sede-cmp-compras"></div>
  <div class="row2">
   <div class="card"><h3>Top 10 Proveedores</h3><div class="cw h340"><canvas id="c-com-prov"></canvas></div></div>
   <div class="card"><h3>Compras por Categor&iacute;a</h3><div class="cw h340"><canvas id="c-com-fam"></canvas></div></div>
@@ -248,6 +251,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 <section id="sec-costo">
  <div class="note" id="cos-note"></div>
  <div class="grid" id="k-cos"></div>
+ <div id="sede-cmp-costo"></div>
  <div class="row2">
   <div class="card"><h3>Costo por Centro de Costos <em>meta 35%</em></h3><div class="cw h300"><canvas id="c-cos-cc"></canvas></div></div>
   <div class="card"><h3>Evoluci&oacute;n Mes a Mes</h3><div class="cw h300"><canvas id="c-cos-mes"></canvas></div></div>
@@ -305,6 +309,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 
 <section id="sec-part">
  <div class="grid" id="k-par"></div>
+ <div id="sede-cmp-part"></div>
  <div class="row2">
   <div class="card"><h3>Ventas por Centro de Costo</h3><div id="p-cc"></div></div>
   <div class="card"><h3>Ventas por Categor&iacute;a <em>top 12</em></h3><div id="p-cat"></div></div>
@@ -321,6 +326,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 
 <section id="sec-inv">
  <div class="grid" id="k-inv"></div>
+ <div id="sede-cmp-inv"></div>
  <div class="row3">
   <div class="card"><h3>Inventario por Centro de Costos</h3><div class="cw h300"><canvas id="c-inv-cc"></canvas></div></div>
   <div class="card"><h3>Inventario por Familia <em>top 12</em></h3><div class="cw h300"><canvas id="c-inv-fam2"></canvas></div></div>
@@ -335,6 +341,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 <section id="sec-mv">
  <div class="note" id="mv-note"></div>
  <div class="grid" id="k-mv"></div>
+ <div id="sede-cmp-mv"></div>
  <div class="row2">
   <div class="card"><h3>Mercanc&iacute;a Vendida por Centro de Costos</h3><div class="cw h300"><canvas id="c-mv-cc"></canvas></div></div>
   <div class="card"><h3>Costo de Mercanc&iacute;a Global <em>meta m&aacute;xima 35%</em></h3><div class="cw h300"><canvas id="c-mv-global"></canvas></div></div>
@@ -886,6 +893,72 @@ function uniq(rows,key){ var m={}; rows.forEach(function(r){ if(r[key]) m[r[key]
 function trim(s,n){ s=String(s==null?"":s); return s.length>n? s.slice(0,n-1)+"\u2026" : s; }
 function mesSort(a,b){ return MONTHS.indexOf(a)-MONTHS.indexOf(b); }
 
+/* ====================== COMPARATIVO ENTRE SEDES ======================
+   Perimetro fijo y unico para cualquier comparativo por sede en todo el
+   tablero. Centro de Produccion NUNCA participa (ni en el perimetro de
+   sedes, ni en el inventario del juego de inventarios).
+   Funcion central reutilizada por todos los modulos: nadie duplica esta
+   logica por su cuenta (Resumen, Ventas, Compras, Costo, Inventarios,
+   Mercancia Vendida y Participacion consumen las mismas funciones). */
+var SEDES_COMPARE = ["LAURELES","INTERPLAZA","OVIEDO","TESORO"];
+function getSedes(){ return SEDES_COMPARE.slice(); }
+function filterBySede(rows,sede){ return (rows||[]).filter(function(r){ return r.sede===sede; }); }
+function groupBySede(rows,metric){
+  var g={}; SEDES_COMPARE.forEach(function(s){ g[s]=0; });
+  (rows||[]).forEach(function(r){ if(g.hasOwnProperty(r.sede)) g[r.sede]+=(+r[metric]||0); });
+  return g;
+}
+/* % participacion = valor de la sede / valor total de las CUATRO sedes x 100.
+   Se recalcula siempre desde los valores filtrados, nunca reutiliza un
+   porcentaje calculado en otra seccion. */
+function calcParticipation(valuesBySede){
+  var total=0; SEDES_COMPARE.forEach(function(s){ total+=(valuesBySede[s]||0); });
+  var out={total:total};
+  SEDES_COMPARE.forEach(function(s){ out[s]=safeDiv(valuesBySede[s]||0,total)*100; });
+  return out;
+}
+function valuesBySede(fn){ var m={}; SEDES_COMPARE.forEach(function(s){ m[s]=fn(s); }); return m; }
+/* calc() de una sola sede: mismo motor central (calc), pero fija el
+   traslado de ESA sede (en vez del F.sede global) para que la comparativa
+   entre las cuatro sedes no colapse todos los traslados en una sola. */
+function calcSede(sede,extraPred){
+  return calc(function(r){ return r.sede===sede && (!extraPred || extraPred(r)); }, sede);
+}
+/* filas {k,v} para las 4 sedes, de mayor a menor, mas el total de las 4 */
+function sedeCompareRows(metricFn){
+  var vals=valuesBySede(metricFn), total=0;
+  SEDES_COMPARE.forEach(function(s){ total+=(vals[s]||0); });
+  var rows=SEDES_COMPARE.map(function(s){ return {k:tc(s),v:vals[s]||0}; })
+                         .sort(function(a,b){ return b.v-a.v; });
+  return {rows:rows,total:total};
+}
+/* el comparativo entre sedes solo aplica cuando el filtro global de Sede
+   esta en "Todas las sedes" (ver seccion 15 del requerimiento) */
+function sedeCompareActive(){ return (typeof F!=="undefined") && F && F.sede==="all"; }
+function sedeCompareBox(containerId){
+  var el=document.getElementById(containerId);
+  if(!el) return null;
+  if(!sedeCompareActive()){ el.style.display="none"; el.innerHTML=""; return null; }
+  el.style.display="";
+  return el;
+}
+/* barras horizontales de participacion + valor + ranking, mismo estilo
+   visual (.prow/.pbar) que el resto del tablero */
+function sedeCompareBars(rows,total){
+  if(!rows || !rows.length) return emptyHTML();
+  var mx=rows[0].v||1, h="";
+  rows.forEach(function(d,i){
+    var p=safeDiv(d.v,total)*100, w=safeDiv(d.v,mx)*100;
+    var c=G[i%G.length];
+    h+='<div class="prow"><span class="pl">'+(i+1)+'&#176; '+esc(d.k)+'</span>'+
+       '<span class="pbar"><i style="width:'+w.toFixed(1)+'%;background:'+c+'"></i></span>'+
+       '<span class="pv">'+fmtM(d.v)+'</span><span class="pp">'+p1(p)+'</span></div>';
+  });
+  h+='<div class="prow" style="border-top:1px solid var(--bd);margin-top:4px;padding-top:6px;font-weight:700">'+
+     '<span class="pl">TOTAL</span><span class="pbar"></span><span class="pv">'+fmtM(total)+'</span><span class="pp">100%</span></div>';
+  return h;
+}
+
 /* ====================== GRAFICOS ====================== */
 function mkChart(id,cfg){
   var el=document.getElementById(id); if(!el) return null;
@@ -1155,7 +1228,7 @@ function invConteos(pred){
   a.sort(function(x,y){ return x.ord - y.ord; });
   return a;
 }
-function calc(pred){
+function calc(pred,sedeOverride){
   var p = pred || TRUE_PRED;
   var ventas = 0, compras = 0;
   FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r)) ventas += r.base; });
@@ -1175,7 +1248,7 @@ function calc(pred){
   }
   var completo = (hasIni && hasFin);
   /* sin los dos conteos el juego de inventarios no es aplicable: se usan las compras del periodo */
-  var __saKey = (typeof F!=="undefined" && F && F.sede && F.sede!=="all") ? F.sede : "ALL";
+  var __saKey = sedeOverride || ((typeof F!=="undefined" && F && F.sede && F.sede!=="all") ? F.sede : "ALL");
   var traslados = (typeof SA_invGame!=="undefined" && SA_invGame[__saKey]) ? (SA_invGame[__saKey].traslados||0) : 0;
   var mv = completo ? (ini + compras + traslados - fin) : compras;
   return {
@@ -1320,6 +1393,7 @@ function renderResumen(){
     + '<div class="ed-check">Validaci&oacute;n: Bar+Cocina + Excluidas = '+fmtCOP(_vbc+_vex)+' (dif '+fmtCOP(_dif)+'). % suma = '+p1(_sumPct)+'</div>';
   if(Math.abs(_dif) > 1) console.warn("Ventas BC + Excluidas != Totales, dif=" + _dif);
   if(Math.abs(_sumPct - 100) > 0.05 && _vt) console.warn("% BC + % Excluidas != 100, suma=" + _sumPct);
+  renderResumenSedeCompare();
 }
 
 /* ====================== 2. VENTAS ====================== */
@@ -1346,6 +1420,7 @@ function renderVentas(){
                .sort(function(a,b){ return a.uds-b.uds; }).slice(0,15);
     botTable(cc==="Cocina"? "t-ven-bc":"t-ven-bb", bot, tot);
   });
+  renderVentasSedeCompare();
 }
 
 /* ====================== 3. COMPRAS ====================== */
@@ -1386,6 +1461,7 @@ function renderCompras(){
 
   genericTable("t-com-prov",provs.slice(0,10),c,"Proveedor",false);
   genericTable("t-com-art",arts.slice(0,10),c,"Art&iacute;culo",true);
+  renderComprasSedeCompare();
 }
 
 /* ====================== 4. COSTO ====================== */
@@ -1457,6 +1533,7 @@ function renderCosto(){
   semRows("d-cos-cocina",costRows("Cocina"));
   semRows("d-cos-bar",costRows("Bar"));
 
+  renderCostoSedeCompare();
 }
 </script><script>
 /* ====================== 5. RENTABILIDAD ====================== */
@@ -1903,6 +1980,7 @@ function renderPart(){
     var l=groupBy(FILTERED.ventas.filter(function(r){return r.ccBiz===cc;}),"art","base",15);
     partTable(cc==="Cocina"? "t-par-c":"t-par-b", l, v);
   });
+  renderPartSedeCompare();
 }
 
 /* ====================== 7. INVENTARIOS ====================== */
@@ -1942,6 +2020,7 @@ function renderInv(){
       el.innerHTML=h+'</tbody></table>';
     }
   }
+  renderInvSedeCompare();
 }
 function pivotInv(id){
   var el=document.getElementById(id); if(!el) return;
@@ -2021,6 +2100,7 @@ function renderMV(){
   barV("c-mv-fam",gf.map(function(d){ return trim(d.k,16); }),gf.map(function(d){ return d.v; }),P,false,false,45);
 
   mvTable();
+  renderMVSedeCompare();
 }
 function mvTable(){
   var el=document.getElementById("t-mv"); if(!el) return;
@@ -2065,6 +2145,200 @@ function bindMV(){
 
 
 
+
+/* ====================== COMPARATIVO ENTRE SEDES · POR MODULO ======================
+   Cada renderXxxSedeCompare() se apoya en calcSede()/sedeCompareRows()/
+   calcParticipation() (definidas en AGREGACION). Ninguno recalcula por su
+   cuenta: todos leen el mismo calc(). Solo se dibujan cuando SEDE = Todas
+   las sedes (sedeCompareBox se encarga de ocultar el contenedor si no). */
+
+/* tabla ejecutiva del Resumen: Sede en filas, indicadores en columnas */
+function sedeCompareTablaResumen(sedeData){
+  var pVentas=calcParticipation(valuesBySede(function(s){ return sedeData[s].ventas; }));
+  var pCompras=calcParticipation(valuesBySede(function(s){ return sedeData[s].compras; }));
+  var pMV=calcParticipation(valuesBySede(function(s){ return sedeData[s].mv; }));
+  var h='<table><thead><tr><th>Sede</th><th class="n">Ventas</th><th class="n">% Ventas</th>'+
+        '<th class="n">Compras</th><th class="n">% Compras</th><th class="n">Inv. Inicial</th>'+
+        '<th class="n">Traslados</th><th class="n">Inv. Final</th><th class="n">Merc. Vendida</th>'+
+        '<th class="n">% MV</th><th class="n">Costo %</th><th class="n">Utilidad Bruta</th></tr></thead><tbody>';
+  var t={ventas:0,compras:0,invIni:0,traslados:0,invFin:0,mv:0,utilidad:0};
+  SEDES_COMPARE.forEach(function(s){
+    var k=sedeData[s];
+    t.ventas+=k.ventas; t.compras+=k.compras; t.invIni+=k.invIni; t.traslados+=k.traslados;
+    t.invFin+=k.invFin; t.mv+=k.mv; t.utilidad+=k.utilidad;
+    h+='<tr><td class="nm">'+esc(tc(s))+'</td>'+
+       '<td class="n">'+fmtM(k.ventas)+'</td><td class="n">'+p1(pVentas[s])+'</td>'+
+       '<td class="n">'+fmtM(k.compras)+'</td><td class="n">'+p1(pCompras[s])+'</td>'+
+       '<td class="n">'+fmtM(k.invIni)+'</td><td class="n">'+fmtM(k.traslados)+'</td>'+
+       '<td class="n">'+fmtM(k.invFin)+'</td><td class="n"><b>'+fmtM(k.mv)+'</b></td>'+
+       '<td class="n">'+p1(pMV[s])+'</td><td class="n">'+tagCosto(k.costoPct)+'</td>'+
+       '<td class="n" style="color:'+(k.utilidad>=0?"#06d6a0":"#e74c3c")+'">'+fmtM(k.utilidad)+'</td></tr>';
+  });
+  var totCostoPct=safeDiv(t.mv,t.ventas)*100;
+  h+='<tr style="background:rgba(0,180,216,.07)"><td style="font-weight:700">TOTAL</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.ventas)+'</td><td class="n" style="font-weight:700">100%</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.compras)+'</td><td class="n" style="font-weight:700">100%</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.invIni)+'</td><td class="n" style="font-weight:700">'+fmtM(t.traslados)+'</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.invFin)+'</td><td class="n" style="font-weight:700">'+fmtM(t.mv)+'</td>'+
+     '<td class="n" style="font-weight:700">100%</td><td class="n" style="font-weight:700">'+tagCosto(totCostoPct)+'</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.utilidad)+'</td></tr>';
+  return h+'</tbody></table>';
+}
+function renderResumenSedeCompare(){
+  var box=sedeCompareBox("sede-cmp-resumen"); if(!box) return;
+  var sedeData={}; SEDES_COMPARE.forEach(function(s){ sedeData[s]=calcSede(s); });
+  var rV=sedeCompareRows(function(s){ return sedeData[s].ventas; });
+  var rC=sedeCompareRows(function(s){ return sedeData[s].compras; });
+  var rI=sedeCompareRows(function(s){ return sedeData[s].invFin; });
+  var rM=sedeCompareRows(function(s){ return sedeData[s].mv; });
+  box.innerHTML=
+    '<div class="card"><h3>Comparativo General por Sede <em>Laureles + Interplaza + Oviedo + Tesoro</em></h3>'+
+    '<div class="scroll">'+sedeCompareTablaResumen(sedeData)+'</div></div>'+
+    '<div class="row2">'+
+      '<div class="card"><h3>Participaci&oacute;n en Ventas por Sede</h3>'+sedeCompareBars(rV.rows,rV.total)+'</div>'+
+      '<div class="card"><h3>Participaci&oacute;n en Compras por Sede</h3>'+sedeCompareBars(rC.rows,rC.total)+'</div>'+
+    '</div><div class="row2">'+
+      '<div class="card"><h3>Participaci&oacute;n en Inventario Final por Sede</h3>'+sedeCompareBars(rI.rows,rI.total)+'</div>'+
+      '<div class="card"><h3>Participaci&oacute;n en Mercanc&iacute;a Vendida por Sede</h3>'+sedeCompareBars(rM.rows,rM.total)+'</div>'+
+    '</div>';
+}
+
+/* comparativo de ventas por sede, y por sede+mes cuando hay mas de un mes en el filtro */
+function sedeCompareVentasPorMes(meses){
+  var h='<table><thead><tr><th>Sede</th>';
+  meses.forEach(function(m){ h+='<th class="n">'+m.toUpperCase()+'</th>'; });
+  h+='<th class="n">Total</th></tr></thead><tbody>';
+  var colT={}, gt=0;
+  SEDES_COMPARE.forEach(function(s){
+    var rt=0;
+    h+='<tr><td class="nm">'+esc(tc(s))+'</td>';
+    meses.forEach(function(m){
+      var v=calc(function(r){ return r.sede===s && r.mes===m; }).ventas;
+      rt+=v; colT[m]=(colT[m]||0)+v;
+      h+='<td class="n">'+(v? fmtM(v):"-")+'</td>';
+    });
+    gt+=rt;
+    h+='<td class="n" style="font-weight:700">'+fmtM(rt)+'</td></tr>';
+  });
+  h+='<tr style="background:rgba(0,180,216,.07)"><td style="font-weight:700">TOTAL</td>';
+  meses.forEach(function(m){ h+='<td class="n" style="font-weight:700">'+fmtM(colT[m]||0)+'</td>'; });
+  h+='<td class="n" style="font-weight:700;color:#06d6a0">'+fmtM(gt)+'</td></tr>';
+  return h+'</tbody></table>';
+}
+function renderVentasSedeCompare(){
+  var box=sedeCompareBox("sede-cmp-ventas"); if(!box) return;
+  var r=sedeCompareRows(function(s){ return calcSede(s).ventas; });
+  var html='<div class="card"><h3>Comparativo de Ventas por Sede <em>ranking y participaci&oacute;n</em></h3>'+
+            sedeCompareBars(r.rows,r.total)+'</div>';
+  var meses=uniq(FILTERED.ventas,"mes").sort(mesSort);
+  if(meses.length>1) html+='<div class="card"><h3>Ventas por Sede y Mes</h3><div class="scroll">'+sedeCompareVentasPorMes(meses)+'</div></div>';
+  box.innerHTML=html;
+}
+
+function renderComprasSedeCompare(){
+  var box=sedeCompareBox("sede-cmp-compras"); if(!box) return;
+  var r=sedeCompareRows(function(s){ return calcSede(s).compras; });
+  box.innerHTML='<div class="card"><h3>Comparativo de Compras por Sede <em>Bar + Cocina &middot; ranking y participaci&oacute;n</em></h3>'+
+                 sedeCompareBars(r.rows,r.total)+'</div>';
+}
+
+/* costo por sede: misma formula del dashboard (Mercancia Vendida / Ventas), sin crear una nueva */
+function renderCostoSedeCompare(){
+  var box=sedeCompareBox("sede-cmp-costo"); if(!box) return;
+  var rows=SEDES_COMPARE.map(function(s){
+    var kCoc=calcSede(s,ccPred("Cocina")), kBar=calcSede(s,ccPred("Bar")), kG=calcSede(s);
+    return {s:s,coc:kCoc.costoPct,bar:kBar.costoPct,glob:kG.costoPct,vG:kG.ventas};
+  });
+  var conVentas=rows.filter(function(r){ return r.vG>0; }), best=null, worst=null;
+  conVentas.forEach(function(r){
+    if(!best||r.glob<best.glob) best=r;
+    if(!worst||r.glob>worst.glob) worst=r;
+  });
+  var h='<table><thead><tr><th>Sede</th><th class="n">Costo Cocina</th><th class="n">Costo Bar</th>'+
+        '<th class="n">Costo Global</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var tag=(best&&r.s===best.s? ' <span title="Mejor costo global">&#127942;</span>':'')+
+            (worst&&r.s===worst.s && worst.s!==(best&&best.s)? ' <span title="Peor costo global">&#9888;&#65039;</span>':'');
+    h+='<tr><td class="nm">'+esc(tc(r.s))+tag+'</td>'+
+       '<td class="n">'+(r.coc?tagCosto(r.coc):"-")+'</td><td class="n">'+(r.bar?tagCosto(r.bar):"-")+'</td>'+
+       '<td class="n">'+(r.vG>0?tagCosto(r.glob):"-")+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  var nota='<div class="note">'+
+    (best? '&#127942; Mejor costo global: <b>'+esc(tc(best.s))+'</b> ('+p1(best.glob)+'). ':'')+
+    (worst? '&#9888;&#65039; Peor costo global: <b>'+esc(tc(worst.s))+'</b> ('+p1(worst.glob)+').':'')+
+    ' Misma f&oacute;rmula que el resto del tablero: Costo % = Mercanc&iacute;a Vendida / Ventas.</div>';
+  box.innerHTML='<div class="card"><h3>Comparativo de Costo por Sede <em>Cocina &middot; Bar &middot; Global</em></h3>'+nota+h+'</div>';
+}
+
+/* inventarios por sede: Centro de Produccion ya viene excluido de FILTERED.inv */
+function renderInvSedeCompare(){
+  var box=sedeCompareBox("sede-cmp-inv"); if(!box) return;
+  var sedeData={}; SEDES_COMPARE.forEach(function(s){ sedeData[s]=calcSede(s); });
+  var pFin=calcParticipation(valuesBySede(function(s){ return sedeData[s].invFin; }));
+  var h='<table><thead><tr><th>Sede</th><th class="n">Inv. Inicial</th><th class="n">Inv. Final</th>'+
+        '<th class="n">Variaci&oacute;n</th><th class="n">% Participaci&oacute;n</th></tr></thead><tbody>';
+  var t={ini:0,fin:0};
+  SEDES_COMPARE.forEach(function(s){
+    var k=sedeData[s], varia=k.invFin-k.invIni;
+    t.ini+=k.invIni; t.fin+=k.invFin;
+    h+='<tr><td class="nm">'+esc(tc(s))+'</td><td class="n">'+fmtM(k.invIni)+'</td><td class="n">'+fmtM(k.invFin)+'</td>'+
+       '<td class="n" style="color:'+(varia>=0?"#06d6a0":"#e74c3c")+'">'+fmtM(varia)+'</td>'+
+       '<td class="n">'+p1(pFin[s])+'</td></tr>';
+  });
+  h+='<tr style="background:rgba(0,180,216,.07)"><td style="font-weight:700">TOTAL</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.ini)+'</td><td class="n" style="font-weight:700">'+fmtM(t.fin)+'</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.fin-t.ini)+'</td><td class="n" style="font-weight:700">100%</td></tr>';
+  h+='</tbody></table>';
+  var rFin=sedeCompareRows(function(s){ return sedeData[s].invFin; });
+  box.innerHTML='<div class="card"><h3>Comparativo de Inventarios por Sede <em>Centro de Producci&oacute;n excluido</em></h3>'+
+                 '<div class="scroll">'+h+'</div></div>'+
+                 '<div class="card"><h3>Participaci&oacute;n de Inventario Final por Sede</h3>'+sedeCompareBars(rFin.rows,rFin.total)+'</div>';
+}
+
+/* mercancia vendida por sede: misma formula Inv.Inicial+Compras+Traslados-Inv.Final */
+function renderMVSedeCompare(){
+  var box=sedeCompareBox("sede-cmp-mv"); if(!box) return;
+  var sedeData={}; SEDES_COMPARE.forEach(function(s){ sedeData[s]=calcSede(s); });
+  var pMV=calcParticipation(valuesBySede(function(s){ return sedeData[s].mv; }));
+  var h='<table><thead><tr><th>Sede</th><th class="n">Inv. Inicial</th><th class="n">Compras</th>'+
+        '<th class="n">Traslados</th><th class="n">Inv. Final</th><th class="n">Merc. Vendida</th>'+
+        '<th class="n">% MV</th><th class="n">Costo %</th></tr></thead><tbody>';
+  var t={ini:0,com:0,tr:0,fin:0,mv:0,ventas:0};
+  SEDES_COMPARE.forEach(function(s){
+    var k=sedeData[s];
+    t.ini+=k.invIni; t.com+=k.compras; t.tr+=k.traslados; t.fin+=k.invFin; t.mv+=k.mv; t.ventas+=k.ventas;
+    h+='<tr><td class="nm">'+esc(tc(s))+'</td><td class="n">'+fmtM(k.invIni)+'</td><td class="n">'+fmtM(k.compras)+'</td>'+
+       '<td class="n">'+fmtM(k.traslados)+'</td><td class="n">'+fmtM(k.invFin)+'</td><td class="n"><b>'+fmtM(k.mv)+'</b></td>'+
+       '<td class="n">'+p1(pMV[s])+'</td><td class="n">'+tagCosto(k.costoPct)+'</td></tr>';
+  });
+  h+='<tr style="background:rgba(0,180,216,.07)"><td style="font-weight:700">TOTAL</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.ini)+'</td><td class="n" style="font-weight:700">'+fmtM(t.com)+'</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.tr)+'</td><td class="n" style="font-weight:700">'+fmtM(t.fin)+'</td>'+
+     '<td class="n" style="font-weight:700">'+fmtM(t.mv)+'</td><td class="n" style="font-weight:700">100%</td>'+
+     '<td class="n" style="font-weight:700">'+tagCosto(safeDiv(t.mv,t.ventas)*100)+'</td></tr>';
+  h+='</tbody></table>';
+  var rMV=sedeCompareRows(function(s){ return sedeData[s].mv; });
+  box.innerHTML='<div class="card"><h3>Comparativo de Mercanc&iacute;a Vendida por Sede</h3><div class="scroll">'+h+'</div></div>'+
+                 '<div class="card"><h3>Participaci&oacute;n de Mercanc&iacute;a Vendida por Sede</h3>'+sedeCompareBars(rMV.rows,rMV.total)+'</div>';
+}
+
+/* participacion: ventas, compras, inventario y mercancia vendida por sede, lado a lado */
+function renderPartSedeCompare(){
+  var box=sedeCompareBox("sede-cmp-part"); if(!box) return;
+  var sedeData={}; SEDES_COMPARE.forEach(function(s){ sedeData[s]=calcSede(s); });
+  var rV=sedeCompareRows(function(s){ return sedeData[s].ventas; });
+  var rC=sedeCompareRows(function(s){ return sedeData[s].compras; });
+  var rI=sedeCompareRows(function(s){ return sedeData[s].invFin; });
+  var rM=sedeCompareRows(function(s){ return sedeData[s].mv; });
+  box.innerHTML='<div class="row2">'+
+    '<div class="card"><h3>Participaci&oacute;n en Ventas por Sede</h3>'+sedeCompareBars(rV.rows,rV.total)+'</div>'+
+    '<div class="card"><h3>Participaci&oacute;n en Compras por Sede</h3>'+sedeCompareBars(rC.rows,rC.total)+'</div>'+
+    '</div><div class="row2">'+
+    '<div class="card"><h3>Participaci&oacute;n en Inventario Final por Sede</h3>'+sedeCompareBars(rI.rows,rI.total)+'</div>'+
+    '<div class="card"><h3>Participaci&oacute;n en Mercanc&iacute;a Vendida por Sede</h3>'+sedeCompareBars(rM.rows,rM.total)+'</div>'+
+    '</div>';
+}
 
 /* ====================== INICIO ====================== */
 document.addEventListener("DOMContentLoaded",function(){
