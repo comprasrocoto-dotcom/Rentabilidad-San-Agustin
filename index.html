@@ -926,9 +926,18 @@ function calcParticipation(valuesBySede){
 function valuesBySede(fn){ var m={}; SEDES_COMPARE.forEach(function(s){ m[s]=fn(s); }); return m; }
 /* calc() de una sola sede: mismo motor central (calc), pero fija el
    traslado de ESA sede (en vez del F.sede global) para que la comparativa
-   entre las cuatro sedes no colapse todos los traslados en una sola. */
-function calcSede(sede,extraPred){
-  return calc(function(r){ return r.sede===sede && (!extraPred || extraPred(r)); }, sede);
+   entre las cuatro sedes no colapse todos los traslados en una sola.
+   ccOverride opcional: si se pasa 'Cocina' o 'Bar', usa el traslado
+   desglosado por Centro de Costo en vez del total combinado. */
+function calcSede(sede,extraPred,ccOverride){
+  return calc(function(r){ return r.sede===sede && (!extraPred || extraPred(r)); }, sede, ccOverride);
+}
+/* calc() de un solo Centro de Costo (Cocina o Bar): usa el traslado
+   desglosado de ESE centro de costo, nunca el total combinado
+   (sumar el total combinado a Cocina Y a Bar por separado duplicaba el
+   traslado y disparaba el costo de Bar). */
+function calcCC(cc,sedeOverride){
+  return calc(ccPred(cc), sedeOverride, cc);
 }
 /* filas {k,v} para las 4 sedes, de mayor a menor, mas el total de las 4 */
 function sedeCompareRows(metricFn){
@@ -1234,7 +1243,7 @@ function invConteos(pred){
   a.sort(function(x,y){ return x.ord - y.ord; });
   return a;
 }
-function calc(pred,sedeOverride){
+function calc(pred,sedeOverride,ccOverride){
   var p = pred || TRUE_PRED;
   var ventas = 0, compras = 0;
   FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r)) ventas += r.base; });
@@ -1255,7 +1264,13 @@ function calc(pred,sedeOverride){
   var completo = (hasIni && hasFin);
   /* sin los dos conteos el juego de inventarios no es aplicable: se usan las compras del periodo */
   var __saKey = sedeOverride || ((typeof F!=="undefined" && F && F.sede && F.sede!=="all") ? F.sede : "ALL");
-  var traslados = (typeof SA_invGame!=="undefined" && SA_invGame[__saKey]) ? (SA_invGame[__saKey].traslados||0) : 0;
+  var __saG = (typeof SA_invGame!=="undefined") ? SA_invGame[__saKey] : null;
+  var traslados = 0;
+  if(__saG){
+    if(ccOverride==="Cocina") traslados = __saG.traslCocina||0;
+    else if(ccOverride==="Bar") traslados = __saG.traslBar||0;
+    else traslados = __saG.traslados||0;
+  }
   var mv = completo ? (ini + compras + traslados - fin) : compras;
   return {
     ventas:ventas, ventasBC:ventasBC, ventasExcl:(ventas-ventasBC), ventasExclPct:safeDiv(ventas-ventasBC,ventas)*100, compras:compras,
@@ -1477,7 +1492,7 @@ function costRows(cc){
   var meses = uniq(FILTERED.ventas,"mes").sort(mesSort);
   sedes.forEach(function(s){
     meses.forEach(function(m){
-      var k = calc(function(r){ return r.sede===s && r.mes===m && (r.ccBiz||r.cc)===cc; });
+      var k = calc(function(r){ return r.sede===s && r.mes===m && (r.ccBiz||r.cc)===cc; }, s, cc);
       if(!(k.ventas>0) || !(k.mv>0)) return;
       out.push({k:m.toUpperCase(), ventas:k.ventas, pct:k.costoPct});
     });
@@ -1494,7 +1509,7 @@ function renderCosto(){
     "C&aacute;lculo actual: " + mvSrcNote() + ". Meta: " + META + "%.";
 
   var v = c.ventas, cg = c.costoPct;
-  var kCoc = calc(ccPred("Cocina")), kBar = calc(ccPred("Bar"));
+  var kCoc = calcCC("Cocina"), kBar = calcCC("Bar");
   var pCoc = kCoc.costoPct, pBar = kBar.costoPct;
 
   var bestCC = null;
@@ -2066,9 +2081,9 @@ var MV_ROWS=[];
 function mvRows(){
   var ccs=["Cocina","Bar"], out=[];
   ccs.forEach(function(cc){
-    var k=calc(ccPred(cc));
+    var k=calcCC(cc);
     if(!(k.ventas>0 || k.compras>0 || k.invIni>0 || k.invFin>0)) return;
-    out.push({cc:cc, ini:k.invIni, com:k.compras, fin:k.invFin,
+    out.push({cc:cc, ini:k.invIni, com:k.compras, tr:k.traslados, fin:k.invFin,
               mv:k.mv, ventas:k.ventas, pct:k.costoPct, util:k.utilidad, completo:k.completo});
   });
   return out;
@@ -2097,7 +2112,7 @@ function renderMV(){
 
   MV_ROWS=mvRows();
   var ccs=["Cocina","Bar"];
-  var kC={}; ccs.forEach(function(x){ kC[x]=calc(ccPred(x)); });
+  var kC={}; ccs.forEach(function(x){ kC[x]=calcCC(x); });
   barV("c-mv-cc",ccs,ccs.map(function(x){ return kC[x].mv; }),P,false,true);
 
   /* Costo de Mercancia Global: una sola sede, el analisis es global */
@@ -2121,22 +2136,24 @@ function mvTable(){
   if(cnt) cnt.textContent=MV_ROWS.length+" centros de costo";
   if(!MV_ROWS.length){ el.innerHTML=emptyHTML("Sin datos para el juego de inventarios"); return; }
   var h='<table><thead><tr><th>Centro de Costo</th><th class="n">Inv. Inicial</th><th class="n">Compras</th>'+
-        '<th class="n">Inv. Final</th><th class="n">Mercanc&iacute;a Vendida</th><th class="n">Ventas Base Neta</th>'+
+        '<th class="n">Traslados</th><th class="n">Inv. Final</th><th class="n">Mercanc&iacute;a Vendida</th><th class="n">Ventas Base Neta</th>'+
         '<th class="n">Utilidad Bruta</th><th class="n">Costo M.V.</th></tr></thead><tbody>';
-  var t={ini:0,com:0,fin:0,mv:0,ventas:0,util:0};
+  var t={ini:0,com:0,tr:0,fin:0,mv:0,ventas:0,util:0};
   MV_ROWS.forEach(function(d){
-    t.ini+=d.ini; t.com+=d.com; t.fin+=d.fin; t.mv+=d.mv; t.ventas+=d.ventas; t.util+=d.util;
+    t.ini+=d.ini; t.com+=d.com; t.tr+=(d.tr||0); t.fin+=d.fin; t.mv+=d.mv; t.ventas+=d.ventas; t.util+=d.util;
     h+='<tr><td>'+tagCC(d.cc)+'</td>'+
-       '<td class="n">'+fmtM(d.ini)+'</td><td class="n">'+fmtM(d.com)+'</td>'+
-       '<td class="n">'+fmtM(d.fin)+'</td><td class="n"><b>'+fmtM(d.mv)+'</b></td>'+
-       '<td class="n">'+fmtM(d.ventas)+'</td>'+
-       '<td class="n" style="color:'+(d.util>=0?"#06d6a0":"#e74c3c")+'">'+fmtM(d.util)+'</td>'+
+       '<td class="n">'+fmtCOP(d.ini)+'</td><td class="n">'+fmtCOP(d.com)+'</td>'+
+       '<td class="n">'+fmtCOP(d.tr||0)+'</td>'+
+       '<td class="n">'+fmtCOP(d.fin)+'</td><td class="n"><b>'+fmtCOP(d.mv)+'</b></td>'+
+       '<td class="n">'+fmtCOP(d.ventas)+'</td>'+
+       '<td class="n" style="color:'+(d.util>=0?"#06d6a0":"#e74c3c")+'">'+fmtCOP(d.util)+'</td>'+
        '<td class="n">'+tagCosto(d.pct)+'</td></tr>';
   });
   h+='<tr><td class="nm"><b>TOTAL</b></td>'+
-     '<td class="n"><b>'+fmtM(t.ini)+'</b></td><td class="n"><b>'+fmtM(t.com)+'</b></td>'+
-     '<td class="n"><b>'+fmtM(t.fin)+'</b></td><td class="n"><b>'+fmtM(t.mv)+'</b></td>'+
-     '<td class="n"><b>'+fmtM(t.ventas)+'</b></td><td class="n"><b>'+fmtM(t.util)+'</b></td>'+
+     '<td class="n"><b>'+fmtCOP(t.ini)+'</b></td><td class="n"><b>'+fmtCOP(t.com)+'</b></td>'+
+     '<td class="n"><b>'+fmtCOP(t.tr)+'</b></td>'+
+     '<td class="n"><b>'+fmtCOP(t.fin)+'</b></td><td class="n"><b>'+fmtCOP(t.mv)+'</b></td>'+
+     '<td class="n"><b>'+fmtCOP(t.ventas)+'</b></td><td class="n"><b>'+fmtCOP(t.util)+'</b></td>'+
      '<td class="n">'+tagCosto(safeDiv(t.mv,t.ventas)*100)+'</td></tr>';
   el.innerHTML=h+'</tbody></table>';
 }
@@ -2145,7 +2162,7 @@ function bindMV(){
   if(ex) ex.onclick=function(){
     if(!MV_ROWS.length){ alert("No hay datos para exportar."); return; }
     var data=MV_ROWS.map(function(r){
-      return {"Centro de Costos":r.cc, "Inv Inicial":r.ini, Compras:r.com,
+      return {"Centro de Costos":r.cc, "Inv Inicial":r.ini, Compras:r.com, Traslados:(r.tr||0),
               "Inv Final":r.fin, "Mercancia vendida":r.mv, "Ventas Base Neta":r.ventas,
               "Utilidad Bruta":r.util, "Costo Mercancia Vendida":r.pct/100};
     });
@@ -2259,7 +2276,7 @@ function renderComprasSedeCompare(){
 function renderCostoSedeCompare(){
   var box=sedeCompareBox("sede-cmp-costo"); if(!box) return;
   var rows=SEDES_COMPARE.map(function(s){
-    var kCoc=calcSede(s,ccPred("Cocina")), kBar=calcSede(s,ccPred("Bar")), kG=calcSede(s);
+    var kCoc=calcSede(s,ccPred("Cocina"),"Cocina"), kBar=calcSede(s,ccPred("Bar"),"Bar"), kG=calcSede(s);
     return {s:s,coc:kCoc.costoPct,bar:kBar.costoPct,glob:kG.costoPct,vG:kG.ventas};
   });
   var conVentas=rows.filter(function(r){ return r.vG>0; }), best=null, worst=null;
@@ -2321,18 +2338,18 @@ function renderMVSedeCompare(){
   SEDES_COMPARE.forEach(function(s){
     var k=sedeData[s];
     t.ini+=k.invIni; t.com+=k.compras; t.tr+=k.traslados; t.fin+=k.invFin; t.mv+=k.mv; t.ventas+=k.ventas;
-    h+='<tr><td class="nm">'+esc(tc(s))+'</td><td class="n">'+fmtM(k.invIni)+'</td><td class="n">'+fmtM(k.compras)+'</td>'+
-       '<td class="n">'+fmtM(k.traslados)+'</td><td class="n">'+fmtM(k.invFin)+'</td><td class="n"><b>'+fmtM(k.mv)+'</b></td>'+
+    h+='<tr><td class="nm">'+esc(tc(s))+'</td><td class="n">'+fmtCOP(k.invIni)+'</td><td class="n">'+fmtCOP(k.compras)+'</td>'+
+       '<td class="n">'+fmtCOP(k.traslados)+'</td><td class="n">'+fmtCOP(k.invFin)+'</td><td class="n"><b>'+fmtCOP(k.mv)+'</b></td>'+
        '<td class="n">'+p1(pMV[s])+'</td><td class="n">'+tagCosto(k.costoPct)+'</td></tr>';
   });
   h+='<tr style="background:rgba(0,180,216,.07)"><td style="font-weight:700">TOTAL</td>'+
-     '<td class="n" style="font-weight:700">'+fmtM(t.ini)+'</td><td class="n" style="font-weight:700">'+fmtM(t.com)+'</td>'+
-     '<td class="n" style="font-weight:700">'+fmtM(t.tr)+'</td><td class="n" style="font-weight:700">'+fmtM(t.fin)+'</td>'+
-     '<td class="n" style="font-weight:700">'+fmtM(t.mv)+'</td><td class="n" style="font-weight:700">100%</td>'+
+     '<td class="n" style="font-weight:700">'+fmtCOP(t.ini)+'</td><td class="n" style="font-weight:700">'+fmtCOP(t.com)+'</td>'+
+     '<td class="n" style="font-weight:700">'+fmtCOP(t.tr)+'</td><td class="n" style="font-weight:700">'+fmtCOP(t.fin)+'</td>'+
+     '<td class="n" style="font-weight:700">'+fmtCOP(t.mv)+'</td><td class="n" style="font-weight:700">100%</td>'+
      '<td class="n" style="font-weight:700">'+tagCosto(safeDiv(t.mv,t.ventas)*100)+'</td></tr>';
   h+='</tbody></table>';
   var rMV=sedeCompareRows(function(s){ return sedeData[s].mv; });
-  box.innerHTML='<div class="card"><h3>Comparativo de Mercanc&iacute;a Vendida por Sede</h3><div class="scroll">'+h+'</div></div>'+
+  box.innerHTML='<div class="card"><h3>Comparativo de Mercanc&iacute;a Vendida por Sede <em>totales en pesos colombianos</em></h3><div class="scroll">'+h+'</div></div>'+
                  '<div class="card"><h3>Participaci&oacute;n de Mercanc&iacute;a Vendida por Sede</h3>'+sedeCompareBars(rMV.rows,rMV.total)+'</div>';
 }
 
@@ -2430,14 +2447,16 @@ document.addEventListener("DOMContentLoaded",function(){
     }).length;}
     /* Traslados: solo Centro de Costo Bar/Cocina (columna D = sede, G = Centro de Costo, N = Coste Variacion).
        Centro de Produccion abastece a las sedes POR TRASLADO (funciona como un proveedor adicional):
-       los "Envios Centro de Produccion" SI se cuentan, nunca se excluyen. */
-    function tras(s){return T.filter(function(r){
+       los "Envios Centro de Produccion" SI se cuentan, nunca se excluyen.
+       cc opcional: si se pasa 'Cocina' o 'Bar', devuelve solo el traslado de ese centro de costo. */
+    function tras(s,cc){return T.filter(function(r){
       if(tCC && !OPER_CC_SET[norm(r[tCC])]) return false;
+      if(cc && tCC && norm(r[tCC])!==norm(cc)) return false;
       return (s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[tAlm]))>-1:canonSede(r[tAlm])===s);
     }).reduce(function(a,r){return a+toNum(r[tCV]);},0);}
     var sedes=['ALL'];
     I.concat(C).forEach(function(r){var s=canonSede(r[iAlm]||r[cAlm]); if(s&&s!=='CENTRO DE PRODUCCION'&&sedes.indexOf(s)<0)sedes.push(s);});
-    sedes.forEach(function(s){ var ini=invAt(INI_SERIAL,s),fin=invAt(FIN_SERIAL,s),fr=invN(FIN_SERIAL,s),ir=invN(INI_SERIAL,s),cp=comp(s),tr=tras(s); var finMiss=fr===0,iniMiss=ir===0; g[s]={ini:ini,compras:cp,traslados:tr,fin:fin,finMissing:finMiss,iniMissing:iniMiss,mv:(finMiss||iniMiss)?null:(ini+cp+tr-fin)}; });
+    sedes.forEach(function(s){ var ini=invAt(INI_SERIAL,s),fin=invAt(FIN_SERIAL,s),fr=invN(FIN_SERIAL,s),ir=invN(INI_SERIAL,s),cp=comp(s),tr=tras(s),trC=tras(s,'Cocina'),trB=tras(s,'Bar'); var finMiss=fr===0,iniMiss=ir===0; g[s]={ini:ini,compras:cp,traslados:tr,traslCocina:trC,traslBar:trB,fin:fin,finMissing:finMiss,iniMissing:iniMiss,mv:(finMiss||iniMiss)?null:(ini+cp+tr-fin)}; });
     window.SA_invGame=g; return g;
   };
   window.SA_meta={INI_SERIAL:INI_SERIAL,FIN_SERIAL:FIN_SERIAL,iniLabel:'2026-06-30',finLabel:'2026-07-31'};
