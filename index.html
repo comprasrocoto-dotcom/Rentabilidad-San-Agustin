@@ -1357,7 +1357,7 @@ function renderResumen(){
     {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
     {icon:"&#128259;",label:"Traslados",value:fmt(c.traslados),sub:fmtCOP(c.traslados),
-     note:"Valorados por Coste Variaci&oacute;n &middot; solo Bar y Cocina &middot; excluye Envios Centro de Produccion",bar:"#8e44ad,#9b59b6"},
+     note:"Valorados por Coste Variaci&oacute;n &middot; solo Bar y Cocina &middot; incluye Envios Centro de Produccion",bar:"#8e44ad,#9b59b6"},
     {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
     {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:fmtCOP(c.mv),
@@ -1636,7 +1636,7 @@ function renderRent(){
     {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
     {icon:"&#128259;",label:"Traslados",value:fmt(c.traslados),sub:fmtCOP(c.traslados),
-     note:"Valorados por Coste Variaci&oacute;n &middot; solo Bar y Cocina &middot; excluye Envios Centro de Produccion",bar:"#8e44ad,#9b59b6"},
+     note:"Valorados por Coste Variaci&oacute;n &middot; solo Bar y Cocina &middot; incluye Envios Centro de Produccion",bar:"#8e44ad,#9b59b6"},
     {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
     {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:fmtCOP(c.mv),
@@ -2390,6 +2390,8 @@ document.addEventListener("DOMContentLoaded",function(){
   if(window.__SA_LAYER__) return; window.__SA_LAYER__=true;
   var SA_ID='1ZcfeaYXmR0WwuBPvCTyqqPOi6mVrJJr3c1s36Dz_LMc';
   var INI_SERIAL=46203, FIN_SERIAL=46234;
+  /* NO se usa para filtrar: los "Envios Centro de Produccion" en Traslados SI se cuentan
+     (Centro de Produccion abastece a las sedes por traslado, funciona como proveedor adicional). */
   var EXCL_MOTIVO='envioscentrodeproduccion';
   var OPER_CC_SET={cocina:1,bar:1};
   function fixMoji(s){ if(s==null)return ''; if(typeof s!=='string')return String(s); if(/[\u00c3\u00c2]/.test(s)){ try{ return decodeURIComponent(escape(s)); }catch(e){ return s; } } return s; }
@@ -2398,6 +2400,10 @@ document.addEventListener("DOMContentLoaded",function(){
   function toNum(v){ if(v==null)return 0; if(typeof v==='number')return v; var s=String(v).replace(/\s/g,''); if(s.indexOf('.')>-1&&s.indexOf(',')>-1){s=s.replace(/\./g,'').replace(',','.');}else if(s.indexOf(',')>-1){s=s.replace(',','.');} var n=parseFloat(s); return isNaN(n)?0:n; }
   function serial(v){ v=Number(v); return v?Math.round(v):0; }
   function keyOf(row,want){ var w=norm(want),ks=Object.keys(row||{}); return ks.filter(function(k){return norm(k)===w;})[0] || ks.filter(function(k){return norm(k).indexOf(w)>-1;})[0]; }
+  /* Encabezado real es "Centro de Costo": buscarlo por 'cc' fallaba porque
+     "centrodecosto" normalizado no contiene la subcadena "cc". Se busca igual
+     que el motor central (col()): por la subcadena "centr" en minusculas. */
+  function ccKeyOf(row){ var ks=Object.keys(row||{}); return ks.filter(function(k){ return String(k).toLowerCase().indexOf('centr')>=0; })[0]; }
   window.SA_fixWb=function(wb){ if(!wb||!wb.Sheets)return wb; wb.SheetNames.forEach(function(nm){ var ws=wb.Sheets[nm]; if(!ws||!ws['!ref'])return; var rg=XLSX.utils.decode_range(ws['!ref']); for(var R=rg.s.r;R<=rg.e.r;R++)for(var C=rg.s.c;C<=rg.e.c;C++){ var a=XLSX.utils.encode_cell({r:R,c:C}),c=ws[a]; if(c&&c.t==='s'&&typeof c.v==='string'&&/[\u00c3\u00c2]/.test(c.v)){ c.v=fixMoji(c.v); if(c.w)c.w=fixMoji(c.w); } } }); return wb; };
   window.SA_invGame=window.SA_invGame||{};
   window.SA_buildGame=function(wb){
@@ -2406,17 +2412,27 @@ document.addEventListener("DOMContentLoaded",function(){
     var C=J('compra'),I=J('inventario'),T=J('traslado');
     var g={};
     if(!C.length&&!I.length){ window.SA_invGame=g; return g; }
-    var cAlm=keyOf(C[0]||{},'almacen'),cNeto=keyOf(C[0]||{},'totalneto'),cCC=keyOf(C[0]||{},'cc');
-    var iAlm=keyOf(I[0]||{},'almacen'),iTot=keyOf(I[0]||{},'total'),iFec=keyOf(I[0]||{},'fechadoc'),iCC=keyOf(I[0]||{},'cc');
-    var tAlm=keyOf(T[0]||{},'almacen'),tCV=keyOf(T[0]||{},'costevariacion'),tMot=keyOf(T[0]||{},'motivotraspaso'),tCC=keyOf(T[0]||{},'cc');
-    function comp(s){return C.filter(function(r){return ((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[cAlm]))>-1:canonSede(r[cAlm])===s))&&OPER_CC_SET[norm(r[cCC])];}).reduce(function(a,r){return a+toNum(r[cNeto]);},0);}
+    var cAlm=keyOf(C[0]||{},'almacen'),cNeto=keyOf(C[0]||{},'totalneto'),cCC=ccKeyOf(C[0]||{});
+    var iAlm=keyOf(I[0]||{},'almacen'),iTot=keyOf(I[0]||{},'total'),iFec=keyOf(I[0]||{},'fechadoc'),iCC=ccKeyOf(I[0]||{});
+    var tAlm=keyOf(T[0]||{},'almacen'),tCV=keyOf(T[0]||{},'costevariacion'),tMot=keyOf(T[0]||{},'motivotraspaso'),tCC=ccKeyOf(T[0]||{});
+    function comp(s){return C.filter(function(r){
+      if(cCC && !OPER_CC_SET[norm(r[cCC])]) return false;
+      return (s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[cAlm]))>-1:canonSede(r[cAlm])===s);
+    }).reduce(function(a,r){return a+toNum(r[cNeto]);},0);}
     /* Solo inventario de Bar/Cocina entra al juego (excluye Aseo, Papeleria, Utensilios, Empaque, etc.), igual que las compras */
-    function invAt(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&OPER_CC_SET[norm(r[iCC])]&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));}).reduce(function(a,r){return a+toNum(r[iTot]);},0);}
-    function invN(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&OPER_CC_SET[norm(r[iCC])]&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));}).length;}
-    /* Traslados: solo Bar/Cocina (si la hoja trae Centro de Costo) y siempre se excluyen los Envios Centro de Produccion */
+    function invAt(sr,s){return I.filter(function(r){
+      if(iCC && !OPER_CC_SET[norm(r[iCC])]) return false;
+      return serial(r[iFec])===sr&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));
+    }).reduce(function(a,r){return a+toNum(r[iTot]);},0);}
+    function invN(sr,s){return I.filter(function(r){
+      if(iCC && !OPER_CC_SET[norm(r[iCC])]) return false;
+      return serial(r[iFec])===sr&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));
+    }).length;}
+    /* Traslados: solo Centro de Costo Bar/Cocina (columna D = sede, G = Centro de Costo, N = Coste Variacion).
+       Centro de Produccion abastece a las sedes POR TRASLADO (funciona como un proveedor adicional):
+       los "Envios Centro de Produccion" SI se cuentan, nunca se excluyen. */
     function tras(s){return T.filter(function(r){
       if(tCC && !OPER_CC_SET[norm(r[tCC])]) return false;
-      if(tMot && norm(r[tMot])===EXCL_MOTIVO) return false;
       return (s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[tAlm]))>-1:canonSede(r[tAlm])===s);
     }).reduce(function(a,r){return a+toNum(r[tCV]);},0);}
     var sedes=['ALL'];
@@ -2460,7 +2476,7 @@ document.addEventListener("DOMContentLoaded",function(){
     else { estado='Inv. Inicial ('+window.SA_meta.iniLabel+') + Compras + Traslados − Inv. Final ('+window.SA_meta.finLabel+')'; mvTxt=fmt(d.mv); }
     if(kmv) kmv.textContent=mvTxt;
     if(cg) cg.textContent=(d.mv==null?mvTxt:fmt(d.mv));
-    if(note) note.textContent='Mercancía Vendida = '+estado+'. Traslados por Coste Variación; se excluyen «Envios Centro de Produccion».';
+    if(note) note.textContent='Mercancía Vendida = '+estado+'. Traslados por Coste Variación (solo Bar y Cocina); incluye Envios Centro de Produccion, la sede que abastece por traslado.';
     window.SA_lastMV=d;
   };
 })();
