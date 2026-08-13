@@ -325,6 +325,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 </section>
 
 <section id="sec-inv">
+ <div class="note" id="inv-note"></div>
  <div class="grid" id="k-inv"></div>
  <div id="sede-cmp-inv"></div>
  <div class="row3">
@@ -528,6 +529,8 @@ var RAW = {ventas:[], compras:[], inv:[], mv:[], rent:[]};
 var FILTERED = {ventas:[], compras:[], inv:[], mv:[], rent:[]};
 /* compras descartadas del juego de inventarios por no ser Bar ni Cocina */
 var EXCL_COMPRAS = [];
+/* filas de inventario descartadas del juego de inventarios por no ser Bar ni Cocina (Aseo, Papeleria, Utensilios, Empaque, etc.) */
+var EXCL_INV = [];
 /* unicos centros de costo operativos admitidos en el juego de inventarios */
 var OPER_CC = {Cocina:1, Bar:1};
 function esCompraOperativa(r){ return !!OPER_CC[r.cc]; }
@@ -812,7 +815,10 @@ function applyFilter(){
   /* Juego de Inventarios: solo compras con Centro de Costo Bar o Cocina */
   FILTERED.compras  = comprasPer.filter(esCompraOperativa);
   EXCL_COMPRAS      = comprasPer.filter(function(r){ return !esCompraOperativa(r); });
-  FILTERED.inv     = RAW.inv.filter(function(r){     if(String(r.sede||"").toUpperCase().indexOf("PRODUCCION")>-1) return false;     return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
+  var invPer        = RAW.inv.filter(function(r){     if(String(r.sede||"").toUpperCase().indexOf("PRODUCCION")>-1) return false;     return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
+  /* Juego de Inventarios: solo inventario con Centro de Costo Bar o Cocina (excluye Aseo, Papeleria, Utensilios, Empaque, etc.) */
+  FILTERED.inv      = invPer.filter(esCompraOperativa);
+  EXCL_INV          = invPer.filter(function(r){ return !esCompraOperativa(r); });
   FILTERED.mv      = RAW.mv.filter(function(r){      return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
   FILTERED.rent    = RAW.rent.filter(function(r){
     return (sd==="all"||!r.sede||r.sede===sd) && (cc==="all"||!r.ccHoja||r.ccHoja===cc);
@@ -1338,7 +1344,7 @@ function renderResumen(){
   var nt = document.getElementById("res-note");
   if(nt) nt.innerHTML =
     "<b>Periodo: " + periodoLbl() + ".</b> Ventas = Base Neta del informe de ventas (sin IVA y sin propinas). " +
-    "Compras = <b>solo</b> los centros de costo <b>Bar</b> y <b>Cocina</b> (los dem&aacute;s se excluyen del juego de inventarios). " +
+    "Compras e Inventario = <b>solo</b> los centros de costo <b>Bar</b> y <b>Cocina</b> (Aseo, Papeler&iacute;a, Utensilios, Empaque y dem&aacute;s se excluyen del juego de inventarios). " +
     "Mercanc&iacute;a Vendida = Inv. Inicial + Compras + Traslados - Inv. Final. " +
     "Costo Global = Mercanc&iacute;a Vendida / Ventas. Utilidad Bruta = Ventas - Mercanc&iacute;a Vendida. " +
     "C&aacute;lculo actual: " + mvSrcNote() + ".";
@@ -1351,7 +1357,7 @@ function renderResumen(){
     {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
     {icon:"&#128259;",label:"Traslados",value:fmt(c.traslados),sub:fmtCOP(c.traslados),
-     note:"Valorados por Coste Variaci&oacute;n (incluye Envios Centro de Produccion)",bar:"#8e44ad,#9b59b6"},
+     note:"Valorados por Coste Variaci&oacute;n &middot; solo Bar y Cocina &middot; excluye Envios Centro de Produccion",bar:"#8e44ad,#9b59b6"},
     {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
     {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:fmtCOP(c.mv),
@@ -1630,7 +1636,7 @@ function renderRent(){
     {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
     {icon:"&#128259;",label:"Traslados",value:fmt(c.traslados),sub:fmtCOP(c.traslados),
-     note:"Valorados por Coste Variaci&oacute;n (incluye Envios Centro de Produccion)",bar:"#8e44ad,#9b59b6"},
+     note:"Valorados por Coste Variaci&oacute;n &middot; solo Bar y Cocina &middot; excluye Envios Centro de Produccion",bar:"#8e44ad,#9b59b6"},
     {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
     {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:fmtCOP(c.mv),
@@ -1986,6 +1992,13 @@ function renderPart(){
 /* ====================== 7. INVENTARIOS ====================== */
 function renderInv(){
   var c = C();
+  var exc=0; EXCL_INV.forEach(function(r){ exc+=r.total; });
+  var excCC={}; EXCL_INV.forEach(function(r){ excCC[r.cc]=(excCC[r.cc]||0)+r.total; });
+  var excTxt=[]; for(var kx in excCC) excTxt.push(kx+" "+fmtCOP(excCC[kx]));
+  var nt=document.getElementById("inv-note");
+  if(nt) nt.innerHTML="<b>Periodo: "+periodoLbl()+".</b> El juego de inventarios incluye <b>&uacute;nicamente</b> el inventario con Centro de Costo "+
+    "<b>Bar</b> o <b>Cocina</b>, igual que las compras. "+
+    (exc? "Excluido del juego de inventarios: <b>"+fmtCOP(exc)+"</b> ("+excTxt.join(" &middot; ")+")." : "En este periodo no hay inventario de otros centros de costo.");
   kpiGrid("k-inv",[
     {icon:"&#128230;",label:"Inventario Inicial",value:fmtM(c.invIni),sub:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
     {icon:"&#128203;",label:"Inventario Final",value:fmtM(c.invFin),sub:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
@@ -2065,7 +2078,7 @@ function renderMV(){
   var nt=document.getElementById("mv-note");
   if(nt) nt.innerHTML=
     "<b>Periodo: "+periodoLbl()+".</b> Mercanc&iacute;a Vendida = Inventario Inicial + Compras - Inventario Final. " +
-    "Las <b>Compras</b> incluyen &uacute;nicamente los centros de costo <b>Bar</b> y <b>Cocina</b>. " +
+    "Las <b>Compras</b> y el <b>Inventario</b> incluyen &uacute;nicamente los centros de costo <b>Bar</b> y <b>Cocina</b>. " +
     "Costo Mercanc&iacute;a Vendida % = Mercanc&iacute;a Vendida / Ventas Bar + Cocina. " +
     "Utilidad Bruta = Ventas - Mercanc&iacute;a Vendida. C&aacute;lculo actual: "+mvSrcNote()+".";
 
@@ -2394,12 +2407,18 @@ document.addEventListener("DOMContentLoaded",function(){
     var g={};
     if(!C.length&&!I.length){ window.SA_invGame=g; return g; }
     var cAlm=keyOf(C[0]||{},'almacen'),cNeto=keyOf(C[0]||{},'totalneto'),cCC=keyOf(C[0]||{},'cc');
-    var iAlm=keyOf(I[0]||{},'almacen'),iTot=keyOf(I[0]||{},'total'),iFec=keyOf(I[0]||{},'fechadoc');
-    var tAlm=keyOf(T[0]||{},'almacen'),tCV=keyOf(T[0]||{},'costevariacion'),tMot=keyOf(T[0]||{},'motivotraspaso');
+    var iAlm=keyOf(I[0]||{},'almacen'),iTot=keyOf(I[0]||{},'total'),iFec=keyOf(I[0]||{},'fechadoc'),iCC=keyOf(I[0]||{},'cc');
+    var tAlm=keyOf(T[0]||{},'almacen'),tCV=keyOf(T[0]||{},'costevariacion'),tMot=keyOf(T[0]||{},'motivotraspaso'),tCC=keyOf(T[0]||{},'cc');
     function comp(s){return C.filter(function(r){return ((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[cAlm]))>-1:canonSede(r[cAlm])===s))&&OPER_CC_SET[norm(r[cCC])];}).reduce(function(a,r){return a+toNum(r[cNeto]);},0);}
-    function invAt(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));}).reduce(function(a,r){return a+toNum(r[iTot]);},0);}
-    function invN(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));}).length;}
-    function tras(s){return T.filter(function(r){return ((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[tAlm]))>-1:canonSede(r[tAlm])===s));}).reduce(function(a,r){return a+toNum(r[tCV]);},0);}
+    /* Solo inventario de Bar/Cocina entra al juego (excluye Aseo, Papeleria, Utensilios, Empaque, etc.), igual que las compras */
+    function invAt(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&OPER_CC_SET[norm(r[iCC])]&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));}).reduce(function(a,r){return a+toNum(r[iTot]);},0);}
+    function invN(sr,s){return I.filter(function(r){return serial(r[iFec])===sr&&OPER_CC_SET[norm(r[iCC])]&&((s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[iAlm]))>-1:canonSede(r[iAlm])===s));}).length;}
+    /* Traslados: solo Bar/Cocina (si la hoja trae Centro de Costo) y siempre se excluyen los Envios Centro de Produccion */
+    function tras(s){return T.filter(function(r){
+      if(tCC && !OPER_CC_SET[norm(r[tCC])]) return false;
+      if(tMot && norm(r[tMot])===EXCL_MOTIVO) return false;
+      return (s==='ALL'?['LAURELES','INTERPLAZA','OVIEDO','TESORO'].indexOf(canonSede(r[tAlm]))>-1:canonSede(r[tAlm])===s);
+    }).reduce(function(a,r){return a+toNum(r[tCV]);},0);}
     var sedes=['ALL'];
     I.concat(C).forEach(function(r){var s=canonSede(r[iAlm]||r[cAlm]); if(s&&s!=='CENTRO DE PRODUCCION'&&sedes.indexOf(s)<0)sedes.push(s);});
     sedes.forEach(function(s){ var ini=invAt(INI_SERIAL,s),fin=invAt(FIN_SERIAL,s),fr=invN(FIN_SERIAL,s),ir=invN(INI_SERIAL,s),cp=comp(s),tr=tras(s); var finMiss=fr===0,iniMiss=ir===0; g[s]={ini:ini,compras:cp,traslados:tr,fin:fin,finMissing:finMiss,iniMissing:iniMiss,mv:(finMiss||iniMiss)?null:(ini+cp+tr-fin)}; });
